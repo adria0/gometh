@@ -1,30 +1,29 @@
-pragma solidity ^0.4.19;
+pragma solidity ^0.4.18;
 
 import "zeppelin-solidity/contracts/token/StandardToken.sol";
-import "./BurnCallback.sol";
 
-contract WETH {
-  
-  address constant public BURNADDR = 0x1;
-  BurnCallback burnCallback;
+contract WETH is StandardToken {
 
-  function WETH(address _burnCallback) {
-     burnCallback = BurnCallback(_burnCallback);
+  address owner;
+
+  function WETH() {
+     owner = msg.sender;
   }
 
-  function mint(address _to, uint256 _amount) onlyOwner {
+  function mint(address _to, uint256 _amount) {
+    require (msg.sender == owner);
+
     totalSupply = totalSupply.add(_amount);
     balances[_to] = balances[_to].add(_amount);
     Transfer(address(0), _to, _amount);
-    return true;
   }
 
-  // override transfer function
-  function transfer(address _to, uint256 _value) public returns (bool) {
-      super.transfer(_to,_value);
-      if (_to == BURNADDR) {
-         burnCallback(msg.sender,_value);
-      }
+  function burn(address _from, uint256 _amount) {
+    require (msg.sender == owner);
+
+    totalSupply = totalSupply.sub(_amount);
+    balances[_from] = balances[_from].sub(_amount);
+    Transfer(_from, address(0), _amount);
   }
-    
+
 }

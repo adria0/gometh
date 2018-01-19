@@ -1,0 +1,53 @@
+version: '2.2'
+services:
+  poa1:
+    build:
+      dockerfile: geth.dockerfile
+      context : .
+    mem_limit: 250000000
+    ports:
+      - "18545:8545"
+    volumes:
+      - ./data:/data:ro
+    links:
+      - poa2
+    entrypoint: /bin/sh /data/poa.sh poa1
+
+  poa2:
+    build:
+      dockerfile: geth.dockerfile
+      context : .
+    mem_limit: 250000000
+    cpu_percent: 5
+    ports:
+      - "28545:8545"
+    volumes:
+      - ./data:/data:ro
+    links:
+      - poa3 
+    entrypoint: /bin/sh /data/poa.sh poa2
+
+  poa3:
+    build:
+      dockerfile: geth.dockerfile
+      context : .
+    ports:
+      - "38545:8545"
+    mem_limit: 250000000
+    cpu_percent: 5
+    volumes:
+      - ./data:/data:ro
+    entrypoint: /bin/sh /data/poa.sh poa3
+
+  parent:
+    build:
+      dockerfile: geth.dockerfile
+      context : .
+    ports:
+      - "48545:8545"
+    mem_limit: 300000000
+    cpu_percent: 5
+    volumes:
+      - ./data:/data:ro
+    entrypoint: /bin/sh /data/parent.sh
+

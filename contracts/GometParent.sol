@@ -1,26 +1,23 @@
-pragma solidity ^0.4.19;
+pragma solidity ^0.4.18;
 
 import "./GometBridge.sol";
 
-
 contract GometParent is GometBridge {
-    
-    event LogLockToChild(address from, uint value);
-    event LogUnlockFromChild(address to, uint value);
-    
+
+    event LogLock(address from, uint value);
+
     function GometParent(address[] _signers) 
-    GometBridge(_signers) public
-    {
+    GometBridge(_signers) public {
     }
     
-    function lockToChild() public {
-        LogLockToChild(msg.sender,msg.value);
+    function parentLock() payable public {
+        require(msg.value > 0);
+        LogLock(msg.sender,msg.value);
     }
     
-    function internalUnlockFromChild(address _to, uint _value) public {
+    function parentUnlock(address _to, uint _value) public {
        require(msg.sender == address(this));
        _to.transfer(_value);
-       LogUnlockFromChild(_to,_value);
     }
     
 }
