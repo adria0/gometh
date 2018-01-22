@@ -26,4 +26,15 @@ contract WETH is StandardToken {
     Transfer(_from, address(0), _amount);
   }
 
+  function transfer(address _from, address _to, uint256 _amount) public {
+    require (msg.sender == owner);
+
+    balances[_from] = balances[_from].sub(_amount);
+    balances[_to] = balances[_to].add(_amount);
+    Transfer(_from, _to, _amount);
+
+  }
+
+
 }
+

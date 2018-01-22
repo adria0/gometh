@@ -2,6 +2,8 @@ pragma solidity ^0.4.18;
 
 contract GometBridge {
 
+    bytes constant web3SignaturePrefix = "\x19Ethereum Signed Message:\n32";
+
     address[][] public epochs;
     struct Transaction {
         uint count;
@@ -42,7 +44,6 @@ contract GometBridge {
         return false;      
      }
     
-    
     function verifyMultiSignature(uint _epoch, bytes32 _hash, bytes32[] _sigs) view public
     returns (bool) {
 
@@ -57,11 +58,11 @@ contract GometBridge {
           
           // retrieve the signer
           
-          uint8 v = uint8(_sigs[i][0]);
+          uint8 v = uint8(uint256(_sigs[i]));
           bytes32 r = _sigs[i+1];
           bytes32 s = _sigs[i+2];
           address signer = ecrecover(_hash,v,r,s); 
-    
+
           // check that this signer exists in the current signer list
           
           while (signerNo<signers.length && signers[signerNo]!=signer) {
@@ -76,44 +77,55 @@ contract GometBridge {
           signerNo++;
     
         }
+        
         return true;
      }
     
     
     // parent chain execution
-    function parentExecute(uint _epoch, uint _txid, bytes _data, bytes32[] _sigs) public {
+    function fullExecute(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
         
         bytes32 hash = keccak256(_epoch,_txid,_data);
-        require(verifyMultiSignature(_epoch,hash,_sigs));
+        bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
+
+        require(verifyMultiSignature(_epoch,prefixedHash,_sigs));
         require(!transactions[hash].executed);
         require(this.call(_data));
         transactions[hash].executed = true;
     }
-    
+
     // child chain execution
-    function childExecute(uint _epoch, uint _txid, bytes _data, uint8 _v, bytes32 _r, bytes32 _s) public {
+    function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, uint8 _v, bytes32 _r, bytes32 _s) public {
 
         address[] storage signers = epochs[epochs.length-1];
 
         bytes32 hash = keccak256(_epoch,_txid,_data);
-        address signer = ecrecover(hash,_v,_r,_s);
+        bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
+
+        address signer = ecrecover(prefixedHash,_v,_r,_s);
 
         require (isSigner(signer));
+
         require (!transactions[hash].approved[signer]);
         require (!transactions[hash].executed);
 
         transactions[hash].count++;
         transactions[hash].approved[signer]=true;
-        
-        if ((2 * transactions[hash].count) /3  >= signers.length) {
+          
+        bool quorum = transactions[hash].count == (2 * signers.length) /3;
+
+        if (quorum) {
             require(this.call(_data));
             transactions[hash].executed=true;
         }
+        
     }
     
     /* ---- multisig ------------------------------------------------ */
 
-    function setEpoch(uint _epoch, address[] _signers) internal {
+    event LogSignersChanged(uint epoch, address[] signers);
+
+    function changeSigners(uint _epoch, address[] _signers) public {
         
         require (msg.sender == address(this));
         
@@ -126,6 +138,7 @@ contract GometBridge {
               epochs[epoch][i] = _signers[i];
           }
 
+        LogSignersChanged(_epoch,_signers);
     } 
     
 }
