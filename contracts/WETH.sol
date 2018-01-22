@@ -6,11 +6,11 @@ contract WETH is StandardToken {
 
   address owner;
 
-  function WETH() {
+  function WETH() public{
      owner = msg.sender;
   }
 
-  function mint(address _to, uint256 _amount) {
+  function mint(address _to, uint256 _amount) public {
     require (msg.sender == owner);
 
     totalSupply = totalSupply.add(_amount);
@@ -18,7 +18,7 @@ contract WETH is StandardToken {
     Transfer(address(0), _to, _amount);
   }
 
-  function burn(address _from, uint256 _amount) {
+  function burn(address _from, uint256 _amount) public {
     require (msg.sender == owner);
 
     totalSupply = totalSupply.sub(_amount);

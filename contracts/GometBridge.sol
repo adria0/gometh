@@ -10,22 +10,26 @@ contract GometBridge {
     }
     mapping (bytes32=>Transaction) public transactions;
 
+    function getEpochs() public view returns (uint) {
+       return epochs.length;
+    }
+
     function GometBridge(address[] _signers) public {
       require(checkSignersOrder(_signers));
-      
       uint epoch = epochs.length++;
       epochs[epoch].length = _signers.length;
       for (uint i=0;i<_signers.length;i++) {
           epochs[epoch][i] = _signers[i];
       }
     }
-    
+
     function checkSignersOrder(address[] _signers) internal pure returns (bool) {
       for (uint i=0;i<_signers.length;i++) {
-         if (i>0 && uint(_signers[i-1])<uint(_signers[i])) {
+         if (i>0 && uint(_signers[i-1])>=uint(_signers[i])) {
             return false;
          }
       }
+      return true;
     }
     
     function isSigner( address _addr) public view returns (bool) {
@@ -44,10 +48,8 @@ contract GometBridge {
 
         uint signerNo=0;
         
-        address[] storage signers;
-        if ( _epoch == 0 ) {
-            signers = epochs[epochs.length-1];
-        } else {
+        address[] storage signers = epochs[epochs.length-1];
+        if ( _epoch != 0 ) {
             signers = epochs[_epoch];
         }
         
@@ -107,7 +109,6 @@ contract GometBridge {
             require(this.call(_data));
             transactions[hash].executed=true;
         }
-        
     }
     
     /* ---- multisig ------------------------------------------------ */
