@@ -30,7 +30,7 @@ contract("GometBridge", (accounts) => {
         var r = `0x${sig.slice(0, 64)}`
         var s = `0x${sig.slice(64, 128)}`
         var v = web3.toDecimal(sig.slice(128, 130)) + 27
-        return [v,r,s]
+        return ["0x"+uint256hex(v),r,s]
     } 
 
     beforeEach(async () => {
@@ -47,12 +47,8 @@ contract("GometBridge", (accounts) => {
 
         let data = bridge.changeSigners.request(epoch+1,newsigners).params[0].data;
 
-        let [v1,r1,s1] = sign(epoch,txid,data,poa1)
-        await bridge.partialExecute(epoch,txid,data,v1,r1,s1)
-
-
-        let [v2,r2,s2] = sign(epoch,txid,data,poa2)
-        await bridge.partialExecute(epoch,txid,data,v2,r2,s2)
+        await bridge.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
+        await bridge.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
 
         assert(await bridge.isSigner(poa4));
         assert((await bridge.getEpochs())-1==epoch+1);
@@ -67,11 +63,7 @@ contract("GometBridge", (accounts) => {
         let epoch = (await bridge.getEpochs())-1
         let data = bridge.changeSigners.request(epoch+1,newsigners).params[0].data;
 
-        let [v1,r1,s1] = sign(epoch,txid,data,poa1)
-        let [v2,r2,s2] = sign(epoch,txid,data,poa2)
-
-        let sigs = ["0x"+uint256hex(v1),r1,s1,"0x"+uint256hex(v2),r2,s2]
-
+        let sigs = sign(epoch,txid,data,poa1).concat(sign(epoch,txid,data,poa2))
         await bridge.fullExecute(epoch,txid,data,sigs)
 
         assert(await bridge.isSigner(poa4));

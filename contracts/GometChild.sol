@@ -17,6 +17,10 @@ contract GometChild is GometBridge {
     function childLock(address _to, uint _amount) public {
        require(msg.sender == address(this));
        weth.mint(_to,_amount);
+
+       if (_to.balance < 0.01 ether ) {
+         _to.transfer(0.01 ether - _to.balance);
+       }
     }
     
     function childUnlock(uint _amount) public {

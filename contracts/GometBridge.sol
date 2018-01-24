@@ -81,7 +81,7 @@ contract GometBridge {
         return true;
      }
     
-    
+
     // parent chain execution
     function fullExecute(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
         
@@ -95,14 +95,18 @@ contract GometBridge {
     }
 
     // child chain execution
-    function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, uint8 _v, bytes32 _r, bytes32 _s) public {
+    function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
 
         address[] storage signers = epochs[epochs.length-1];
 
         bytes32 hash = keccak256(_epoch,_txid,_data);
         bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
 
-        address signer = ecrecover(prefixedHash,_v,_r,_s);
+        uint8 v = uint8(uint256(_sigs[0]));
+        bytes32 r = _sigs[1];
+        bytes32 s = _sigs[2];
+
+        address signer = ecrecover(prefixedHash,v,r,s);
 
         require (isSigner(signer));
 

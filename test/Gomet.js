@@ -36,7 +36,7 @@ contract("GometParent", (accounts) => {
         var r = `0x${sig.slice(0, 64)}`
         var s = `0x${sig.slice(64, 128)}`
         var v = web3.toDecimal(sig.slice(128, 130)) + 27
-        return [v,r,s]
+        return ["0x"+uint256hex(v),r,s]
     } 
 
     beforeEach(async () => {
@@ -46,9 +46,9 @@ contract("GometParent", (accounts) => {
         weth = WETH.at(await child.weth());
     });
 
-    it("Do the full cycle", async () => {
+    it("Lock ethers", async () => {
 
-        // lock ethers
+        // lock ethers ----------------------------------------
 
         const amount = web3.toWei(1,'ether')
 
@@ -63,15 +63,11 @@ contract("GometParent", (accounts) => {
         let epoch = (await child.getEpochs())-1
         let data = child.childLock.request(lockFrom,lockValue).params[0].data;
 
-        let [v1,r1,s1] = sign(epoch,txid,data,poa1)
-        await child.partialExecute(epoch,txid,data,v1,r1,s1)
-
-        let [v2,r2,s2] = sign(epoch,txid,data,poa2)
-        await child.partialExecute(epoch,txid,data,v2,r2,s2)
+        await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
+        await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
 
         assert((await weth.balanceOf(user1)).eq(amount))
 
     });
-
 
 });
