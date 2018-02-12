@@ -1,22 +1,24 @@
 pragma solidity ^0.4.18;
 
-contract GometBridge {
+contract GometMultisig {
 
     bytes constant web3SignaturePrefix = "\x19Ethereum Signed Message:\n32";
 
     address[][] public epochs;
+
     struct Transaction {
         uint count;
         bool executed;
         mapping (address=>bool)  approved;
     }
+    
     mapping (bytes32=>Transaction) public transactions;
 
     function getEpochs() public view returns (uint) {
        return epochs.length;
     }
 
-    function GometBridge(address[] _signers) public {
+    function GometMultisig(address[] _signers) public {
       require(checkSignersOrder(_signers));
       uint epoch = epochs.length++;
       epochs[epoch].length = _signers.length;
@@ -91,6 +93,7 @@ contract GometBridge {
         require(verifyMultiSignature(_epoch,prefixedHash,_sigs));
         require(!transactions[hash].executed);
         require(this.call(_data));
+
         transactions[hash].executed = true;
     }
 
@@ -125,7 +128,7 @@ contract GometBridge {
         
     }
     
-    /* ---- multisig ------------------------------------------------ */
+    /* ---- multisig functions --------------------------------------- */
 
     event LogSignersChanged(uint epoch, address[] signers);
 

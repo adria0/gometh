@@ -3,14 +3,14 @@ pragma solidity ^0.4.18;
 import "./GometBridge.sol";
 import "./WETH.sol";
 
-contract GometChild is GometBridge {
+contract GometChild is GometMultisig {
 
     event LogUnlock(address from, uint value);
 
     WETH public weth;
 
     function GometChild(address[] _signers) public 
-    GometBridge(_signers) {
+    GometMultisig(_signers) {
         weth = new WETH();
     }
 

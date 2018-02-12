@@ -1,13 +1,13 @@
 pragma solidity ^0.4.18;
 
-import "./GometBridge.sol";
+import "./GometMultisig.sol";
 
-contract GometParent is GometBridge {
+contract GometParent is GometMultisig {
 
     event LogLock(address from, uint value);
 
     function GometParent(address[] _signers) 
-    GometBridge(_signers) public {
+    GometMultisig(_signers) public {
     }
     
     function parentLock() payable public {

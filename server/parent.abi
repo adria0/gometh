@@ -1,0 +1,250 @@
+[
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "_epoch",
+				"type": "uint256"
+			},
+			{
+				"name": "_hash",
+				"type": "bytes32"
+			},
+			{
+				"name": "_sigs",
+				"type": "bytes32[]"
+			}
+		],
+		"name": "verifyMultiSignature",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "epochs",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"name": "transactions",
+		"outputs": [
+			{
+				"name": "count",
+				"type": "uint256"
+			},
+			{
+				"name": "executed",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "_addr",
+				"type": "address"
+			}
+		],
+		"name": "isSigner",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "getEpochs",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "from",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"name": "value",
+				"type": "uint256"
+			}
+		],
+		"name": "LogLock",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "epoch",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "signers",
+				"type": "address[]"
+			}
+		],
+		"name": "LogSignersChanged",
+		"type": "event"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_epoch",
+				"type": "uint256"
+			},
+			{
+				"name": "_signers",
+				"type": "address[]"
+			}
+		],
+		"name": "changeSigners",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "_signers",
+				"type": "address[]"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_epoch",
+				"type": "uint256"
+			},
+			{
+				"name": "_txid",
+				"type": "bytes32"
+			},
+			{
+				"name": "_data",
+				"type": "bytes"
+			},
+			{
+				"name": "_sigs",
+				"type": "bytes32[]"
+			}
+		],
+		"name": "partialExecute",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_epoch",
+				"type": "uint256"
+			},
+			{
+				"name": "_txid",
+				"type": "bytes32"
+			},
+			{
+				"name": "_data",
+				"type": "bytes"
+			},
+			{
+				"name": "_sigs",
+				"type": "bytes32[]"
+			}
+		],
+		"name": "fullExecute",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_to",
+				"type": "address"
+			},
+			{
+				"name": "_value",
+				"type": "uint256"
+			}
+		],
+		"name": "parentUnlock",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "parentLock",
+		"outputs": [],
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "function"
+	}
+]
