@@ -4,10 +4,10 @@
 
 const assertFail = require("./helpers/assertFail.js");
 
-const GometBridge = artifacts.require("../contracts/GometBridge.sol");
+const GometMultisig = artifacts.require("../contracts/GometMultisig.sol");
 
-contract("GometBridge", (accounts) => {
-    let bridge;
+contract("GometMultisig", (accounts) => {
+    let multisig;
 
     const {
         0: poa1,
@@ -35,7 +35,7 @@ contract("GometBridge", (accounts) => {
 
     beforeEach(async () => {
         let initial = [poa1,poa2,poa3].sort()
-        bridge = await GometBridge.new([poa1,poa2,poa3].sort());
+        multisig = await GometMultisig.new([poa1,poa2,poa3].sort());
     });
 
     it("Add new signer using partialExecute", async () => {
@@ -43,15 +43,15 @@ contract("GometBridge", (accounts) => {
         let newsigners = [poa1,poa2,poa3,poa4].sort()
 
         let txid = web3.sha3("txid")
-        let epoch = (await bridge.getEpochs())-1
+        let epoch = (await multisig.getEpochs())-1
 
-        let data = bridge.changeSigners.request(epoch+1,newsigners).params[0].data;
+        let data = multisig.changeSigners.request(epoch+1,newsigners).params[0].data;
 
-        await bridge.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
-        await bridge.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
+        await multisig.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
+        await multisig.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
 
-        assert(await bridge.isSigner(poa4));
-        assert((await bridge.getEpochs())-1==epoch+1);
+        assert(await multisig.isSigner(poa4));
+        assert((await multisig.getEpochs())-1==epoch+1);
 
     });
 
@@ -60,14 +60,14 @@ contract("GometBridge", (accounts) => {
         let newsigners = [poa1,poa2,poa3,poa4].sort()
 
         let txid = web3.sha3("txid")
-        let epoch = (await bridge.getEpochs())-1
-        let data = bridge.changeSigners.request(epoch+1,newsigners).params[0].data;
+        let epoch = (await multisig.getEpochs())-1
+        let data = multisig.changeSigners.request(epoch+1,newsigners).params[0].data;
 
         let sigs = sign(epoch,txid,data,poa1).concat(sign(epoch,txid,data,poa2))
-        await bridge.fullExecute(epoch,txid,data,sigs)
+        await multisig.fullExecute(epoch,txid,data,sigs)
 
-        assert(await bridge.isSigner(poa4));
-        assert((await bridge.getEpochs())-1==epoch+1);
+        assert(await multisig.isSigner(poa4));
+        assert((await multisig.getEpochs())-1==epoch+1);
 
     });
 

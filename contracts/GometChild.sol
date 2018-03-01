@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
 
-import "./GometBridge.sol";
+import "./GometMultisig.sol";
 import "./WETH.sol";
 
 contract GometChild is GometMultisig {
