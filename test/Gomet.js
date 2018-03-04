@@ -54,14 +54,14 @@ contract("GometParent", (accounts) => {
 
         assert((await weth.balanceOf(user1))==0)
 
-        let res = await parent.parentLock( { value : amount, from: user1  });
+        let res = await parent.lock( { value : amount, from: user1  });
         assert(res.logs[0].event == 'LogLock');
         let lockFrom = res.logs[0].args.from  
         let lockValue = res.logs[0].args.value
 
         let txid = web3.sha3("txid")
         let epoch = (await child.getEpochs())-1
-        let data = child.childLock.request(lockFrom,lockValue).params[0].data;
+        let data = child._mint.request(lockFrom,lockValue).params[0].data;
 
         await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
         await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))

@@ -1,6 +1,6 @@
 pragma solidity ^0.4.18;
 
-contract GometMultisig {
+contract OfflineMultisig {
 
     bytes constant web3SignaturePrefix = "\x19Ethereum Signed Message:\n32";
 
@@ -18,7 +18,7 @@ contract GometMultisig {
        return epochs.length;
     }
 
-    function GometMultisig(address[] _signers) public {
+    function OfflineMultisig(address[] _signers) public {
       require(checkSignersOrder(_signers));
       uint epoch = epochs.length++;
       epochs[epoch].length = _signers.length;
@@ -127,12 +127,12 @@ contract GometMultisig {
         }
         
     }
-    
+
     /* ---- multisig functions --------------------------------------- */
 
     event LogSignersChanged(uint epoch, address[] signers);
-
-    function changeSigners(uint _epoch, address[] _signers) public {
+    
+    function _changeSigners(uint _epoch, address[] _signers) public {
         
         require (msg.sender == address(this));
         

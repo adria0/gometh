@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "giveth-common-contracts": "^0.4.0",
-    "truffle": "^4.0.4",
+    "truffle": "^4.1.0",
     "zeppelin-solidity": "^1.5.0"
   },
   "devDependencies": {},

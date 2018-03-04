@@ -1,23 +1,47 @@
 pragma solidity ^0.4.18;
 
-import "./GometMultisig.sol";
+import "./OfflineMultisig.sol";
 
-contract GometParent is GometMultisig {
+contract GometParent is OfflineMultisig {
 
-    event LogLock(address from, uint value);
+    uint constant DUST = 0;
+
+    // A good question here:
+    // - events means what happened? <- better
+    // - events means what needs to be done?
+
+    event LogLock(address from, uint256 value);
+    event LogUnlock(address to, uint256 value);
 
     function GometParent(address[] _signers) 
-    GometMultisig(_signers) public {
+    OfflineMultisig(_signers) public {
     }
     
-    function parentLock() payable public {
-        require(msg.value > 0);
+    /// User calls this functions to send ETH to child chain
+    function lock() payable public {
+        require(msg.value > DUST);
         LogLock(msg.sender,msg.value);
+
+        // PoA nodes will retrieve this event and then generates a 
+        //   muliple partialExecute's for a GometChild._mint call
+        // When all partialExecutes are generated, WETH is mined
+        //   in GometChild
     }
-    
-    function parentUnlock(address _to, uint _value) public {
+
+    /// User calls this function to recover ETH from child chain
+    function unlock(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
+        // this should trigger _parentUnlock function, and ensures that the function is
+        //  executed only and only one time
+        this.fullExecute(_epoch,_txid,_data,_sigs);
+    }
+
+    /* ---- multisig functions --------------------------------------- */
+
+    function _parentUnlock(address _to, uint _value) public {
        require(msg.sender == address(this));
        _to.transfer(_value);
+       LogUnlock(_to,_value);
     }
-    
+
+
 }

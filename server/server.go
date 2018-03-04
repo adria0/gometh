@@ -11,10 +11,12 @@ import (
 	"context"
 	"io/ioutil"
 	"math/big"
-	"net/http"
+	_ "net/http"
 	"time"
 	"log"
-
+	"encoding/hex"
+	"encoding/json"
+	
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -24,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 
-	"github.com/gin-gonic/gin"
+	_ "github.com/gin-gonic/gin"
 	"fmt"
 )
 
@@ -34,25 +36,24 @@ func assert(err error) {
 	}
 }
 
-func sha3of(s string) common.Hash {
-	hasher := sha3.NewKeccak256()
-	hash := hasher.Sum([]byte(s))
-	var r common.Hash
-	copy(r[:], hash[:32])
-	return r
+func sha3of(s string) string {
+	sha := sha3.NewKeccak256()
+	sha.Write([]byte(s))
+	hash := sha.Sum(nil)
+	return "0x"+hex.EncodeToString(hash)
 }
 
-
-type BridgeClient struct {
-	client *ethclient.Client
-	account accounts.Account
-	ks *keystore.KeyStore
-	encoder abi.ABI
-	contractAddress common.Address
+type Web3Client struct {
+	Client *ethclient.Client
+	Account accounts.Account
+	Ks *keystore.KeyStore
+	Abi abi.ABI
+	ByteCode []byte
+	ContractAddress *common.Address
+	ReceiptTimeout time.Duration
 }
 
-func NewBridgeClient( rpcUrl string, abiFile string,  contractAddress common.Address,
-	keystoreFolder string ,  passwd string ) (*BridgeClient,error) {
+func NewWeb3Client( rpcUrl string, ks *keystore.KeyStore,  account accounts.Account) (*Web3Client,error) {
 
 	var err error
 
@@ -60,81 +61,160 @@ func NewBridgeClient( rpcUrl string, abiFile string,  contractAddress common.Add
 	if err != nil {
 		return nil, err
 	}
-	
-	def, err := ioutil.ReadFile(abiFile)
-	if err != nil {
-		return nil, err
-	}
 
-	encoder, err := abi.JSON(bytes.NewReader(def))
-	if err != nil {
-		return nil, err
-	}
-
-	ks := keystore.NewKeyStore(keystoreFolder, keystore.StandardScryptN, keystore.StandardScryptP)
-
-	if len(ks.Accounts()) != 1 {
-		return nil, fmt.Errorf("only one account in keystore is expected")
-	}
-
-	err = ks.Unlock(ks.Accounts()[0], passwd)
-	if err != nil {
-		return nil, err
-	}
-
-	return &BridgeClient{
-		client : client,
-		account : ks.Accounts()[0],
-		ks: ks,
-		encoder : encoder,
-		contractAddress : contractAddress,
+	return &Web3Client{
+		Client : client,
+		Ks: ks,
+		Account : account,
+		ReceiptTimeout: 120 * time.Second,
 	}, nil
 }
 
-func (b *BridgeClient) sendTransaction(calldata []byte, amount *big.Int ) (string , error) {
+func (b *Web3Client) SetContract(jsonFile string) (error) {
+
+	content, err := ioutil.ReadFile(jsonFile)
+	if err != nil {
+		return err
+	}
+
+	var fields map[string]interface{}
+	if err := json.Unmarshal(content, &fields) ; err != nil {
+		return err;
+	}
+
+	abivalue := fields["abi"]
+	bytecodehex := fields["bytecode"].(string)
+	if b.ByteCode,err = hex.DecodeString(bytecodehex[2:]) ; err!= nil {
+		return err
+	}
+
+	abijson, err := json.Marshal(&abivalue)
+	if err != nil {
+		return err
+	}
+
+	b.Abi, err = abi.JSON(bytes.NewReader(abijson))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Web3Client) SetContractAddress(contractAddress common.Address) (error) {
+	
+	b.ContractAddress = &contractAddress
+	return nil
+}	
+
+func (b *Web3Client) DeployContract() (error) {
+
+	_,receipt,err := b.SendTransaction(nil,big.NewInt(0),b.ByteCode)
+	if err != nil {
+		return err
+	}
+
+	b.ContractAddress = &receipt.ContractAddress
+
+	return nil
+}
+
+func (b *Web3Client) AccountInfo() (string, error) {
+
+	address := b.Account.Address.Hex()
+	ctx := context.TODO()
+	balance, err := b.Client.BalanceAt(ctx,b.Account.Address,nil)
+	if err!=nil {
+		return "",nil
+	}
+	return address+"="+balance.String()+" wei",nil
+}	
+	
+func (b *Web3Client) SendTransaction(to *common.Address, value *big.Int, calldata []byte) (*types.Transaction , *types.Receipt, error) {
 
 	var err error
+	var tx *types.Transaction
+	var receipt *types.Receipt
 
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
 	defer cancel()
 
-	network,err := b.client.NetworkID(ctx)
+	network,err := b.Client.NetworkID(ctx)
+	if err != nil {
+		return nil,nil,err
+	}
+	
+	gasPrice, err := b.Client.SuggestGasPrice(ctx)
+	if err != nil {
+		return nil,nil,err
+	}
+	
+	nonce, err := b.Client.NonceAt(ctx, b.Account.Address, nil)
+	if err != nil {
+		return nil,nil,err
+	}
+	
+	gasLimit, err := b.Client.EstimateGas(ctx,ethereum.CallMsg{
+		From  : b.Account.Address,
+		To    : to,
+		Value : value,
+		Data  : calldata,
+	})
+
+	if err != nil {
+		return nil,nil,err
+	}
+
+	if to == nil {
+		tx = types.NewContractCreation(
+			nonce,             // nonce int64
+			value,             // amount *big.Int
+			gasLimit,          // gasLimit *big.Int
+			gasPrice,          // gasPrice *big.Int
+			calldata,          // data []byte
+		)	
+	} else {
+		tx = types.NewTransaction(
+			nonce,             // nonce int64
+			*to, 			   // to common.Address
+			value,             // amount *big.Int
+			gasLimit,          // gasLimit *big.Int
+			gasPrice,          // gasPrice *big.Int
+			calldata,          // data []byte
+		)	
+	}
+
+	if tx, err = b.Ks.SignTx(b.Account, tx, network) ; err != nil {
+		return nil,nil,err
+	}
+
+	if err = b.Client.SendTransaction(ctx, tx) ; err != nil {
+		return nil,nil,err
+	}
+
+	log.Println("Sent transaction ", tx.Hash().Hex())
+
+	start := time.Now()
+	for receipt == nil && time.Now().Sub(start) < b.ReceiptTimeout {
+		receipt, err = b.Client.TransactionReceipt(ctx, tx.Hash())
+		if receipt == nil { 
+			time.Sleep(1000 * time.Millisecond)
+		}
+	}
+
+	return tx, receipt, err		
+}
+
+
+/*
+func (b *BridgeClient) DeployContract(contractFile string) (error) {
+	
+	msgdata, err := b.encoder.Pack("fullExecute", epoch,txid,data,sigs)
 	if err != nil {
 		return "",err
 	}
 
-	gasPrice, err := b.client.SuggestGasPrice(ctx)
-	if err != nil {
-		return "",err
-	}
-
-	nonce, err := b.client.NonceAt(ctx, b.account.Address, nil)
-	if err != nil {
-		return "",err
-	}
-
-	gasLimit := big.NewInt(200000)
-
-	tx := types.NewTransaction(
-		nonce,             // nonce int64
-		b.contractAddress, // to common.Address
-		amount,            // amount *big.Int
-		gasLimit,          // gasLimit *big.Int
-		gasPrice,          // gasPrice *big.Int
-		calldata,          // data []byte
-	)
-
-	tx, err = b.ks.SignTx(b.account, tx, network)
-	if err != nil {
-		return "",err
-	}
-
-	err = b.client.SendTransaction(ctx, tx)
-	if err != nil {
-		return "",err
-	}
-
-	return tx.Hash().Hex(), nil
+	return b.sendTransaction(b.contractAddress,  big.NewInt(0), msgdata)
 }
 
 func (b *BridgeClient) FullExecute(epoch uint, txid [32]byte, data []byte, sigs [][32]byte) (string , error) {
@@ -144,7 +224,7 @@ func (b *BridgeClient) FullExecute(epoch uint, txid [32]byte, data []byte, sigs 
 		return "",err
 	}
 
-	return b.sendTransaction(msgdata,big.NewInt(0))
+	return b.sendTransaction(b.contractAddress,  big.NewInt(0), msgdata)
 }
 
 func (b *BridgeClient) PartialExecute(epoch uint, txid []byte, data []byte, sigs [][32]byte) (string, error) {
@@ -155,12 +235,48 @@ func (b *BridgeClient) PartialExecute(epoch uint, txid []byte, data []byte, sigs
 		return "",err
 	}
 
-	return b.sendTransaction(calldata,big.NewInt(0))
+	return b.sendTransaction(b.contractAddress,  big.NewInt(0), calldata)
 } 
+*/
 
-func (b *BridgeClient) StartServer() error {
+type GometParentHandler struct {
+	*Web3Client
+}
 
-	// logSignersChanged := sha3of("LogSignersChanged(uint,address[])")
+func NewGometParentHandler( rpcUrl string, ks *keystore.KeyStore,  account accounts.Account) (*GometParentHandler,error) {
+	web3client,err := NewWeb3Client(rpcUrl,ks,account)
+	return &GometParentHandler{web3client}, err
+}
+
+
+func (b *GometParentHandler) CallLock(value *big.Int) error {
+	msgdata, err := b.Abi.Pack("lock")
+	if err != nil {
+		return err
+	}
+	_,_,err = b.SendTransaction(b.ContractAddress,  value, msgdata)
+	return err
+}
+
+func (b *GometParentHandler) handleLockEvent(data []byte)  {
+
+	type LogLockEvent struct {
+		From common.Address
+		Value *big.Int
+	}
+
+	var logLockEvent LogLockEvent
+	err := b.Abi.Unpack(&logLockEvent,"LogLock",data)
+	if err != nil {
+		fmt.Println("Error",err)
+	} else {
+		fmt.Printf("Unpacked %#v",logLockEvent)				
+	}	
+}
+	
+func (b *GometParentHandler) ListenEvents() error {
+
+	LogLockEventSignature := sha3of("LogLock(address,uint256)")
 
 	ctx := context.Background()
 	ch := make(chan types.Log)
@@ -168,10 +284,10 @@ func (b *BridgeClient) StartServer() error {
 	query := ethereum.FilterQuery {
 		FromBlock: big.NewInt(0),
 		ToBlock: big.NewInt(10000000),
-		Addresses: []common.Address{b.contractAddress},
+		Addresses: []common.Address{*b.ContractAddress},
 		Topics: [][]common.Hash{{}},
 	}
-	_, err := b.client.SubscribeFilterLogs(ctx,query,ch)
+	_, err := b.Client.SubscribeFilterLogs(ctx,query,ch)
 	if err != nil {
 		return err
 	}
@@ -180,46 +296,72 @@ func (b *BridgeClient) StartServer() error {
 	go func() {
 		log.Println("Started listening logs")
 		for true {
-	 	   log := <-ch
-	       fmt.Printf("Matching log encountered %v\n",log)
-	    }
+			log := <-ch
+			if log.Removed {
+				continue
+			}
+			fmt.Println("Log from address",log.Address.Hex())
+			for c,t := range(log.Topics) {
+				fmt.Printf("  Topic[%v]: %v",c,t.Hex())				
+			}
+			fmt.Printf("  Data: %v",hex.EncodeToString(log.Data))
+			if log.Topics[0].Hex() == LogLockEventSignature {
+				go b.handleLockEvent(log.Data)
+			}
+		}
 	}()
 
 	return nil
 }
 
-func createKeyStoreIfNotExists(keystoreFolder,passwd string) (bool) {
-	ks := keystore.NewKeyStore(keystoreFolder, keystore.StandardScryptN, keystore.StandardScryptP)
-	if len(ks.Accounts()) == 0 {
-		log.Println("Keystore not found. Creating new one.")
-		_, err := ks.NewAccount(passwd)
-		if err != nil {
-			panic(err)
-		}
-		log.Println("Caller address", ks.Accounts()[0].Address.Hex())
-		return true
-	}
-	return false
-}
-
-
 func main() {
 
-	passwd := "111111"
+	// -- open keystore
 
-	if createKeyStoreIfNotExists("./keystore",passwd) {
-		return
+	keystoreFolder := "keyStore"
+	keystorePasswd := "111111"
+
+	var err error
+	var account accounts.Account
+	
+	ks := keystore.NewKeyStore(keystoreFolder, keystore.StandardScryptN, keystore.StandardScryptP)
+	if len(ks.Accounts()) == 0 {
+		account, err = ks.NewAccount(keystorePasswd)
+		assert(err)
+	} else {
+		account = ks.Accounts()[0]
 	}
+	assert(ks.Unlock(account, keystorePasswd))
 
-	c,err := NewBridgeClient(
+	c,err := NewGometParentHandler(
 		"ws://127.0.0.1:8546",
-		"./parent.abi",
-		common.HexToAddress("0x8626F17170Db46FF28C5fBE37182AFC175cE4642"),
-		"keystore",
-		passwd,
+		ks,
+		account,
 	)
 	assert(err)
+	
+	accountInfo, err := c.AccountInfo()
+	assert(err)
 
+	log.Println("ACCOUNT INFO ",accountInfo)
+
+	err = c.SetContract("../build/contracts/GometParent.json")
+	assert(err)
+
+	err = c.DeployContract()
+	assert(err)
+
+	log.Println("Contract deployed at ",c.ContractAddress.Hex())
+	
+	err = c.ListenEvents() 
+	assert(err)
+
+	<-time.After(time.Second)
+
+	c.CallLock(big.NewInt(1))
+
+	<-time.After(time.Second * 3600)
+/*
 	err = c.StartServer()
 	assert(err)
 
@@ -228,4 +370,6 @@ func main() {
 		c.JSON(http.StatusOK,gin.H{"success": true} )
 	})
 	r.Run()
+*/
+
 }

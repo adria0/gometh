@@ -4,9 +4,9 @@
 
 const assertFail = require("./helpers/assertFail.js");
 
-const GometMultisig = artifacts.require("../contracts/GometMultisig.sol");
+const OfflineMultisig = artifacts.require("../contracts/OfflineMultisig.sol");
 
-contract("GometMultisig", (accounts) => {
+contract("OfflineMultisig", (accounts) => {
     let multisig;
 
     const {
@@ -35,7 +35,7 @@ contract("GometMultisig", (accounts) => {
 
     beforeEach(async () => {
         let initial = [poa1,poa2,poa3].sort()
-        multisig = await GometMultisig.new([poa1,poa2,poa3].sort());
+        multisig = await OfflineMultisig.new([poa1,poa2,poa3].sort());
     });
 
     it("Add new signer using partialExecute", async () => {
@@ -45,7 +45,7 @@ contract("GometMultisig", (accounts) => {
         let txid = web3.sha3("txid")
         let epoch = (await multisig.getEpochs())-1
 
-        let data = multisig.changeSigners.request(epoch+1,newsigners).params[0].data;
+        let data = multisig._changeSigners.request(epoch+1,newsigners).params[0].data;
 
         await multisig.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
         await multisig.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
@@ -61,7 +61,7 @@ contract("GometMultisig", (accounts) => {
 
         let txid = web3.sha3("txid")
         let epoch = (await multisig.getEpochs())-1
-        let data = multisig.changeSigners.request(epoch+1,newsigners).params[0].data;
+        let data = multisig._changeSigners.request(epoch+1,newsigners).params[0].data;
 
         let sigs = sign(epoch,txid,data,poa1).concat(sign(epoch,txid,data,poa2))
         await multisig.fullExecute(epoch,txid,data,sigs)
@@ -70,6 +70,5 @@ contract("GometMultisig", (accounts) => {
         assert((await multisig.getEpochs())-1==epoch+1);
 
     });
-
 
 });
