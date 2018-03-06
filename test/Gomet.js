@@ -63,8 +63,8 @@ contract("GometParent", (accounts) => {
         let epoch = (await child.getEpochs())-1
         let data = child._mint.request(lockFrom,lockValue).params[0].data;
 
-        await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa1))
-        await child.partialExecute(epoch,txid,data,sign(epoch,txid,data,poa2))
+        await child.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa1))
+        await child.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa2))
 
         assert((await weth.balanceOf(user1)).eq(amount))
 

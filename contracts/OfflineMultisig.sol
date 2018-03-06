@@ -2,6 +2,8 @@ pragma solidity ^0.4.18;
 
 contract OfflineMultisig {
 
+    event Log(string s);
+
     bytes constant web3SignaturePrefix = "\x19Ethereum Signed Message:\n32";
 
     address[][] public epochs;
@@ -85,7 +87,7 @@ contract OfflineMultisig {
     
 
     // parent chain execution
-    function fullExecute(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
+    function fullExecuteOff(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
         
         bytes32 hash = keccak256(_epoch,_txid,_data);
         bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
@@ -98,9 +100,7 @@ contract OfflineMultisig {
     }
 
     // child chain execution
-    function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
-
-        address[] storage signers = epochs[epochs.length-1];
+    function partialExecuteOff(uint256 _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
 
         bytes32 hash = keccak256(_epoch,_txid,_data);
         bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
@@ -111,20 +111,39 @@ contract OfflineMultisig {
 
         address signer = ecrecover(prefixedHash,v,r,s);
 
-        require (isSigner(signer));
+        partialExecute(_epoch,_txid,_data,signer);  
+    }    
 
-        require (!transactions[hash].approved[signer]);
+
+    // child chain execution
+    function partialExecuteOn(uint256 _epoch, bytes32 _txid, bytes _data) public {
+        
+        partialExecute(_epoch,_txid,_data,msg.sender);   
+
+    }    
+
+
+    // child chain execution
+    function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, address _signer) private {
+
+        bytes32 hash = keccak256(_epoch,_txid,_data);
+
+        require (isSigner(_signer));
+
+        require (!transactions[hash].approved[_signer]);
         require (!transactions[hash].executed);
 
         transactions[hash].count++;
-        transactions[hash].approved[signer]=true;
-          
-        bool quorum = transactions[hash].count == (2 * signers.length) /3;
+        transactions[hash].approved[_signer]=true;
+
+        address[] storage signers = epochs[epochs.length-1];
+        bool quorum = transactions[hash].count >= (2 * signers.length) /3;
 
         if (quorum) {
             require(this.call(_data));
             transactions[hash].executed=true;
         }
+        
         
     }
 

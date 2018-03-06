@@ -10,7 +10,7 @@ contract GometParent is OfflineMultisig {
     // - events means what happened? <- better
     // - events means what needs to be done?
 
-    event LogLock(address from, uint256 value);
+    event LogLock(uint256 epoch,  address from, uint256 value);
     event LogUnlock(address to, uint256 value);
 
     function GometParent(address[] _signers) 
@@ -20,7 +20,7 @@ contract GometParent is OfflineMultisig {
     /// User calls this functions to send ETH to child chain
     function lock() payable public {
         require(msg.value > DUST);
-        LogLock(msg.sender,msg.value);
+        LogLock(epochs.length, msg.sender,msg.value);
 
         // PoA nodes will retrieve this event and then generates a 
         //   muliple partialExecute's for a GometChild._mint call
@@ -32,7 +32,7 @@ contract GometParent is OfflineMultisig {
     function unlock(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
         // this should trigger _parentUnlock function, and ensures that the function is
         //  executed only and only one time
-        this.fullExecute(_epoch,_txid,_data,_sigs);
+        this.fullExecuteOff(_epoch,_txid,_data,_sigs);
     }
 
     /* ---- multisig functions --------------------------------------- */
