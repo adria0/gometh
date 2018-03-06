@@ -14,11 +14,12 @@ import (
 
 type Contract struct {
 	Abi      abi.ABI
+	Client   *Web3Client
 	ByteCode []byte
 	Address  *common.Address
 }
 
-func NewContract(jsonFile string) (*Contract, error) {
+func NewContract(client *Web3Client, jsonFile string) (*Contract, error) {
 
 	var contract Contract
 
@@ -48,6 +49,8 @@ func NewContract(jsonFile string) (*Contract, error) {
 		return nil, err
 	}
 
+	contract.Client = client
+
 	return &contract, nil
 }
 
@@ -57,16 +60,16 @@ func (b *Contract) SetAddress(address common.Address) error {
 	return nil
 }
 
-func (b *Contract) SendTransactionSync(client *Web3Client, value *big.Int, funcname string, params ...interface{}) (*types.Transaction, *types.Receipt, error) {
+func (b *Contract) SendTransactionSync(value *big.Int, funcname string, params ...interface{}) (*types.Transaction, *types.Receipt, error) {
 
 	msg, err := b.Abi.Pack(funcname, params...)
 	if err != nil {
 		return nil, nil, err
 	}
-	return client.SendTransactionSync(b.Address, value, msg)
+	return b.Client.SendTransactionSync(b.Address, value, msg)
 }
 
-func (b *Contract) Deploy(client *Web3Client, params ...interface{}) (*types.Transaction, *types.Receipt, error) {
+func (b *Contract) Deploy(params ...interface{}) (*types.Transaction, *types.Receipt, error) {
 
 	init, err := b.Abi.Pack("", params...)
 	if err != nil {
@@ -76,11 +79,20 @@ func (b *Contract) Deploy(client *Web3Client, params ...interface{}) (*types.Tra
 	code := append([]byte(nil), b.ByteCode...)
 	code = append(code, init...)
 
-	tx, receipt, err := client.SendTransactionSync(nil, big.NewInt(0), code)
+	tx, receipt, err := b.Client.SendTransactionSync(nil, big.NewInt(0), code)
 
 	if err == nil {
 		b.Address = &receipt.ContractAddress
 	}
 
 	return tx, receipt, err
+}
+
+func (b *Contract) Call(value *big.Int, funcname string, params ...interface{}) ([]byte, error) {
+
+	msgdata, err := b.Abi.Pack(funcname, params...)
+	if err != nil {
+		return nil, err
+	}
+	return b.Client.Call(b.Address, value, msgdata)
 }

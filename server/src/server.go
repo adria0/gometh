@@ -27,13 +27,14 @@ func assert(err error) {
 
 var (
 	parentClient   *gometh.Web3Client
-	parentContract *gometh.Contract
 	childClient    *gometh.Web3Client
+	parentContract *gometh.Contract
 	childContract  *gometh.Contract
+	wethContract   *gometh.Contract
 )
 
 func callLock(value *big.Int) error {
-	_, _, err := parentContract.SendTransactionSync(parentClient, value, "lock")
+	_, _, err := parentContract.SendTransactionSync(value, "lock")
 	return err
 }
 
@@ -56,10 +57,11 @@ func handleLockEvent(eventlog *types.Log) {
 	copy(txhash[:], eventlog.TxHash.Bytes())
 
 	_, _, err = childContract.SendTransactionSync(
-		childClient, big.NewInt(0),
+		big.NewInt(0),
 		"partialExecuteOn", event.Epoch, txhash, mintmsg,
 	)
 	assert(err)
+
 }
 
 func handleLogEvent(eventlog *types.Log) {
@@ -67,7 +69,21 @@ func handleLogEvent(eventlog *types.Log) {
 	err := parentContract.Abi.Unpack(&event, "Log", eventlog.Data)
 	assert(err)
 
-	log.Printf("Unpacked LogEvent %#v\n", event)
+	log.Printf("contractlog %#v\n", event)
+}
+
+func handleCommitStateEvent(eventlog *types.Log) {
+
+	type CommitStateEvent struct {
+		BlockNo *big.Int
+		Hash    [32]byte
+	}
+
+	var event CommitStateEvent
+	err := wethContract.Abi.Unpack(&event, "CommitState", eventlog.Data)
+	assert(err)
+
+	log.Printf("handleLogEvent %#v\n", event)
 }
 
 func main() {
@@ -112,23 +128,25 @@ func main() {
 	log.Println("ACCOUNT INFO CHiLD CHAIN", childAccountInfo)
 
 	// -- contracts
-
-	parentContract, err = gometh.NewContract("../../build/contracts/GometParent.json")
+	parentContract, err = gometh.NewContract(parentClient, "../../build/contracts/GometParent.json")
 	assert(err)
 
-	childContract, err = gometh.NewContract("../../build/contracts/GometChild.json")
+	childContract, err = gometh.NewContract(childClient, "../../build/contracts/GometChild.json")
 	assert(err)
 
 	// -- deploy contracts
 	initialSigners := []common.Address{parentClient.Account.Address}
-
-	log.Println("--- deploying parent contract ---")
-	_, _, err = parentContract.Deploy(parentClient, initialSigners)
+	_, _, err = parentContract.Deploy(initialSigners)
+	assert(err)
+	_, _, err = childContract.Deploy(initialSigners)
 	assert(err)
 
-	log.Println("--- deploying child contract  ---")
-	_, _, err = childContract.Deploy(childClient, initialSigners)
+	// -- get weth address
+	wethcallresult, err := childContract.Call(big.NewInt(0), "weth")
 	assert(err)
+	wethContract, err = gometh.NewContract(childClient, "../../build/contracts/WETH.json")
+	assert(err)
+	wethContract.SetAddress(common.BytesToAddress(wethcallresult[12:]))
 
 	// -- start processing
 
@@ -142,10 +160,17 @@ func main() {
 		"Log(string)",
 		handleLogEvent,
 	)
+
 	childClient.RegisterEventHandler(
 		*childContract.Address,
 		"Log(string)",
 		handleLogEvent,
+	)
+
+	childClient.RegisterEventHandler(
+		*wethContract.Address,
+		"CommitState(uint256,bytes32)",
+		handleCommitStateEvent,
 	)
 
 	childClient.HandleEvents()

@@ -148,6 +148,20 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 
 	return tx, receipt, err
 }
+func (b *Web3Client) Call(to *common.Address, value *big.Int, calldata []byte) ([]byte, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
+	defer cancel()
+
+	msg := ethereum.CallMsg{
+		From:  b.Account.Address,
+		To:    to,
+		Value: value,
+		Data:  calldata,
+	}
+
+	return b.Client.CallContract(ctx, msg, nil)
+}
 
 func (b *Web3Client) RegisterEventHandler(address common.Address, eventSignature string, handler func(*types.Log)) {
 
@@ -213,7 +227,6 @@ func (b *Web3Client) HandleEvents() error {
 			// dumpLogEvent(&logevent)
 			for _, v := range b.EventHandlers {
 				if logevent.Address == v.Address && logevent.Topics[0].Hex() == v.Topic {
-					log.Print("EVENT ", v.EventSignature)
 					v.Handler(&logevent)
 					break
 				}
