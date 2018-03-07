@@ -7,6 +7,7 @@ geth --dev console --ws --networkid 1337
 */
 
 import (
+	"encoding/hex"
 	"log"
 	"math/big"
 	"time"
@@ -75,15 +76,33 @@ func handleLogEvent(eventlog *types.Log) {
 func handleCommitStateEvent(eventlog *types.Log) {
 
 	type CommitStateEvent struct {
-		BlockNo *big.Int
-		Hash    [32]byte
+		BlockNo   *big.Int
+		RootState [32]byte
 	}
 
 	var event CommitStateEvent
 	err := wethContract.Abi.Unpack(&event, "CommitState", eventlog.Data)
 	assert(err)
 
-	log.Printf("handleLogEvent %#v\n", event)
+	log.Printf("CommitStateEvent block=%v hash=%v\n", event.BlockNo, hex.EncodeToString(event.RootState[:]))
+}
+
+func handleTransferEvent(eventlog *types.Log) {
+
+	type TransferEvent struct {
+		_     common.Address
+		_     common.Address
+		Value *big.Int
+	}
+
+	var event TransferEvent
+	err := wethContract.Abi.Unpack(&event, "Transfer", eventlog.Data)
+	assert(err)
+
+	from := common.BytesToAddress(eventlog.Topics[1][:])
+	to := common.BytesToAddress(eventlog.Topics[2][:])
+
+	log.Printf("WEthTransfer %v %v->%v\n", event.Value, from.Hex(), to.Hex())
 }
 
 func main() {
@@ -171,6 +190,18 @@ func main() {
 		*wethContract.Address,
 		"CommitState(uint256,bytes32)",
 		handleCommitStateEvent,
+	)
+
+	childClient.RegisterEventHandler(
+		*wethContract.Address,
+		"Transfer(address,address,uint256)",
+		handleTransferEvent,
+	)
+
+	childClient.RegisterEventHandler(
+		*wethContract.Address,
+		"Log(string)",
+		handleLogEvent,
 	)
 
 	childClient.HandleEvents()

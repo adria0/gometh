@@ -224,13 +224,13 @@ func (b *Web3Client) HandleEvents() error {
 			if logevent.Removed {
 				continue
 			}
-			// dumpLogEvent(&logevent)
 			for _, v := range b.EventHandlers {
 				if logevent.Address == v.Address && logevent.Topics[0].Hex() == v.Topic {
 					v.Handler(&logevent)
 					break
 				}
 			}
+			// dumpLogEvent(&logevent)
 		}
 	}()
 

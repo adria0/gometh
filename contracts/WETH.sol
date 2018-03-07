@@ -5,7 +5,8 @@ import "./PatriciaTree.sol";
 
 contract WETH is StandardToken, PatriciaTree  {
 
-  event CommitState(uint blockNo, bytes32 rootState);
+  event Log(string s);
+  event CommitState(uint256 blockNo, bytes32 rootState);
 
   address      owner;
 
@@ -18,9 +19,9 @@ contract WETH is StandardToken, PatriciaTree  {
 
     totalSupply = totalSupply.add(_amount);
     balances[_to] = balances[_to].add(_amount);
-
+ 
     Transfer(address(0), _to, _amount);
-
+ 
     super.insert(addr2bytes(_to),uint2bytes(balances[_to]));
     CommitState(block.number,root);
   }

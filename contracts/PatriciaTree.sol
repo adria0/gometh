@@ -183,7 +183,6 @@ contract PatriciaTree {
     
     // TODO also return the proof
     function insert(bytes key, bytes value) public  {
-    	require(owner == msg.sender); // added
 
         D.Label memory k = D.Label(keccak256(key), 256);
         bytes32 valueHash = keccak256(value);
