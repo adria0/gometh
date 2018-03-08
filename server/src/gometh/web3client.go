@@ -3,7 +3,6 @@ package gometh
 import (
 	"context"
 	"encoding/hex"
-	"log"
 	"math/big"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"fmt"
@@ -124,8 +122,6 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 		return nil, nil, err
 	}
 
-	log.Println("SEND Tx ", tx.Hash().Hex(), "...")
-
 	start := time.Now()
 	for receipt == nil && time.Now().Sub(start) < b.ReceiptTimeout {
 		receipt, err = b.Client.TransactionReceipt(ctx, tx.Hash())
@@ -135,19 +131,16 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 	}
 
 	if receipt != nil && receipt.Status == types.ReceiptStatusFailed {
-		log.Println("FAIL Tx ", tx.Hash().Hex())
 		return tx, receipt, fmt.Errorf("ReceiptStatusFailed")
 	}
 
 	if receipt == nil {
-		log.Println("LOST Tx ", tx.Hash().Hex())
 		return tx, receipt, fmt.Errorf("ReceiptStatusFailed")
 	}
 
-	log.Println("SUCC Tx ", tx.Hash().Hex(), " gas ", receipt.GasUsed)
-
 	return tx, receipt, err
 }
+
 func (b *Web3Client) Call(to *common.Address, value *big.Int, calldata []byte) ([]byte, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
@@ -163,21 +156,23 @@ func (b *Web3Client) Call(to *common.Address, value *big.Int, calldata []byte) (
 	return b.Client.CallContract(ctx, msg, nil)
 }
 
-func (b *Web3Client) RegisterEventHandler(address common.Address, eventSignature string, handler func(*types.Log)) {
+func (b *Web3Client) RegisterEventHandler(contract *Contract, event string, handler func(*types.Log)) error {
 
-	sha := sha3.NewKeccak256()
-	sha.Write([]byte(eventSignature))
-	hash := sha.Sum(nil)
-	topic := "0x" + hex.EncodeToString(hash)
+	abievent, ok := contract.Abi.Events[event]
+	if !ok {
+		return fmt.Errorf("Event %v not found", event)
+	}
+	topicID := abievent.Id()
 
 	eventHandler := EventHandler{
-		Address:        address,
-		EventSignature: eventSignature,
-		Topic:          topic,
+		Address:        *contract.Address,
+		EventSignature: abievent.String(),
+		Topic:          "0x" + hex.EncodeToString(topicID[:]),
 		Handler:        handler,
 	}
 
 	b.EventHandlers = append(b.EventHandlers, eventHandler)
+	return nil
 }
 
 func dumpLogEvent(eventlog *types.Log) {
@@ -226,11 +221,14 @@ func (b *Web3Client) HandleEvents() error {
 			}
 			for _, v := range b.EventHandlers {
 				if logevent.Address == v.Address && logevent.Topics[0].Hex() == v.Topic {
-					v.Handler(&logevent)
+					//					log.Println("[Event] ", v.EventSignature)
+					if v.Handler != nil {
+						go v.Handler(&logevent)
+					}
 					break
 				}
 			}
-			// dumpLogEvent(&logevent)
+			//dumpLogEvent(&logevent)
 		}
 	}()
 

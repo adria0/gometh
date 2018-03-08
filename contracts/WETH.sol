@@ -6,7 +6,7 @@ import "./PatriciaTree.sol";
 contract WETH is StandardToken, PatriciaTree  {
 
   event Log(string s);
-  event CommitState(uint256 blockNo, bytes32 rootState);
+  event StateChange(uint256 blockNo, bytes32 rootState);
 
   address      owner;
 
@@ -23,7 +23,7 @@ contract WETH is StandardToken, PatriciaTree  {
     Transfer(address(0), _to, _amount);
  
     super.insert(addr2bytes(_to),uint2bytes(balances[_to]));
-    CommitState(block.number,root);
+    StateChange(block.number,root);
   }
 
   function burn(address _from, uint256 _amount) public {
@@ -34,7 +34,7 @@ contract WETH is StandardToken, PatriciaTree  {
     Transfer(_from, address(0), _amount);
 
     super.insert(addr2bytes(_from),uint2bytes(balances[_from]));
-    CommitState(block.number,root);
+    StateChange(block.number,root);
   }
 
   function transfer(address _from, address _to, uint256 _amount) public {
@@ -46,7 +46,7 @@ contract WETH is StandardToken, PatriciaTree  {
 
     super.insert(addr2bytes(_from),uint2bytes(balances[_from]));
     super.insert(addr2bytes(_to),uint2bytes(balances[_to]));
-    CommitState(block.number,root);
+    StateChange(block.number,root);
   }
 
   // override transfer
@@ -57,7 +57,7 @@ contract WETH is StandardToken, PatriciaTree  {
     if (success && _value >0 ) {
       super.insert(addr2bytes(msg.sender),uint2bytes(balances[msg.sender]));
       super.insert(addr2bytes(_to),uint2bytes(balances[_to]));
-      CommitState(block.number,root);
+      StateChange(block.number,root);
     }
 
     return success;
@@ -72,7 +72,7 @@ contract WETH is StandardToken, PatriciaTree  {
     if (success && _value >0 ) {
       super.insert(addr2bytes(_from),uint2bytes(balances[_from]));
       super.insert(addr2bytes(_to),uint2bytes(balances[_to]));
-      CommitState(block.number,root);
+      StateChange(block.number,root);
     }
 
     return success;

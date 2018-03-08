@@ -111,9 +111,8 @@ contract OfflineMultisig {
 
         address signer = ecrecover(prefixedHash,v,r,s);
 
-        partialExecute(_epoch,_txid,_data,signer);  
+        partialExecute(_epoch,_txid,_data,signer);
     }    
-
 
     // child chain execution
     function partialExecuteOn(uint256 _epoch, bytes32 _txid, bytes _data) public {
@@ -121,7 +120,6 @@ contract OfflineMultisig {
         partialExecute(_epoch,_txid,_data,msg.sender);   
 
     }    
-
 
     // child chain execution
     function partialExecute(uint256 _epoch, bytes32 _txid, bytes _data, address _signer) private {
@@ -143,7 +141,6 @@ contract OfflineMultisig {
             require(this.call(_data));
             transactions[hash].executed=true;
         }
-        
         
     }
 
@@ -168,4 +165,3 @@ contract OfflineMultisig {
     } 
     
 }
-

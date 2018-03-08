@@ -6,6 +6,8 @@ import "./WETH.sol";
 contract GometChild is OfflineMultisig {
 
     event LogBurn(address from, uint value);
+    event LogMintMultisigned(address to, uint value);
+    event LogStateChangeMultisigned(uint256 blockNo, bytes32 rootState);
 
     WETH public weth;
 
@@ -36,6 +38,8 @@ contract GometChild is OfflineMultisig {
 
     function _mint(address _to, uint _amount) public {
        require(msg.sender == address(this));
+
+       LogMintMultisigned(_to,_amount);
        weth.mint(_to,_amount);
 
        // send a litte of ether to call toLocalEther
@@ -43,5 +47,14 @@ contract GometChild is OfflineMultisig {
          _to.transfer(0.01 ether - _to.balance);
        }
     }
-  
+
+    // this function is called via partialExecuteOff, this means that all
+    //     offline transactions will be available, this means that this calls
+    //     can be called also into the parent chain
+
+    function _statechangemultisigned(uint256 blockNo, bytes32 rootState) public {
+       require(msg.sender == address(this));      
+       LogStateChangeMultisigned(blockNo, rootState);
+    }
+
 }

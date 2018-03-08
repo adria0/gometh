@@ -7,7 +7,6 @@ geth --dev console --ws --networkid 1337
 */
 
 import (
-	"encoding/hex"
 	"log"
 	"math/big"
 	"time"
@@ -15,10 +14,14 @@ import (
 	"gometh"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
+
+var instance string
 
 func assert(err error) {
 	if err != nil {
@@ -39,6 +42,27 @@ func callLock(value *big.Int) error {
 	return err
 }
 
+func sign(client *gometh.Web3Client, data ...[]byte) ([3][32]byte, error) {
+	web3SignaturePrefix := []byte("\x19Ethereum Signed Message:\n32")
+
+	hash := crypto.Keccak256(data...)
+	prefixedHash := crypto.Keccak256(web3SignaturePrefix, hash)
+
+	var ret [3][32]byte
+
+	// The produced signature is in the [R || S || V] format where V is 0 or 1.
+	sig, err := client.Ks.SignHash(client.Account, prefixedHash)
+	if err != nil {
+		return ret, err
+	}
+
+	// We need to convert it to the format []uint256 = {v,r,s} format
+	ret[0][31] = sig[64] + 27
+	copy(ret[1][:], sig[0:32])
+	copy(ret[2][:], sig[32:64])
+	return ret, nil
+}
+
 func handleLockEvent(eventlog *types.Log) {
 
 	type LogLockEvent struct {
@@ -51,16 +75,21 @@ func handleLockEvent(eventlog *types.Log) {
 	err := parentContract.Abi.Unpack(&event, "LogLock", eventlog.Data)
 	assert(err)
 
+	log.Printf("LockEvent %v %v wei", event.From.Hex(), event.Value)
+
 	mintmsg, err := childContract.Abi.Pack("_mint", event.From, event.Value)
 	assert(err)
 
 	var txhash [32]byte
 	copy(txhash[:], eventlog.TxHash.Bytes())
 
+	log.Printf("partialExecuteOff _mint")
+
 	_, _, err = childContract.SendTransactionSync(
 		big.NewInt(0),
 		"partialExecuteOn", event.Epoch, txhash, mintmsg,
 	)
+
 	assert(err)
 
 }
@@ -73,25 +102,52 @@ func handleLogEvent(eventlog *types.Log) {
 	log.Printf("contractlog %#v\n", event)
 }
 
-func handleCommitStateEvent(eventlog *types.Log) {
+func handleStateChange(eventlog *types.Log) {
 
-	type CommitStateEvent struct {
+	type StateChangeEvent struct {
 		BlockNo   *big.Int
 		RootState [32]byte
 	}
 
-	var event CommitStateEvent
-	err := wethContract.Abi.Unpack(&event, "CommitState", eventlog.Data)
+	epoch := big.NewInt(0)
+	txid := common.BytesToHash(eventlog.TxHash.Bytes())
+
+	var event StateChangeEvent
+	err := wethContract.Abi.Unpack(&event, "StateChange", eventlog.Data)
 	assert(err)
 
-	log.Printf("CommitStateEvent block=%v hash=%v\n", event.BlockNo, hex.EncodeToString(event.RootState[:]))
+	msg, err := childContract.Abi.Pack("_statechangemultisigned", event.BlockNo, event.RootState)
+	assert(err)
+	sig, err := sign(childClient, abi.U256(epoch), txid[:], msg)
+
+	assert(err)
+
+	log.Printf("partialExecuteOff _statechangemultisigned")
+	_, _, err = childContract.SendTransactionSync(
+		big.NewInt(0),
+		"partialExecuteOff", epoch, txid, msg, sig,
+	)
+
+	assert(err)
+}
+
+func handleMintMultisigned(eventlog *types.Log) {
+
+	type MintMultisignedEvent struct {
+		To    common.Address
+		Value *big.Int
+	}
+
+	var event MintMultisignedEvent
+	err := childContract.Abi.Unpack(&event, "LogMintMultisigned", eventlog.Data)
+	assert(err)
+
+	log.Printf("MintMultisigned %v %v wei\n", event.To.Hex(), event.Value)
 }
 
 func handleTransferEvent(eventlog *types.Log) {
 
 	type TransferEvent struct {
-		_     common.Address
-		_     common.Address
 		Value *big.Int
 	}
 
@@ -102,7 +158,18 @@ func handleTransferEvent(eventlog *types.Log) {
 	from := common.BytesToAddress(eventlog.Topics[1][:])
 	to := common.BytesToAddress(eventlog.Topics[2][:])
 
-	log.Printf("WEthTransfer %v %v->%v\n", event.Value, from.Hex(), to.Hex())
+	log.Printf("WTransfer %v %v->%v\n", event.Value, from.Hex(), to.Hex())
+}
+
+func handleStateChangeMultisigned(eventlog *types.Log) {
+
+	type StateChangeMultisignedEvent struct {
+		BlockNo   *big.Int
+		RootState [32]byte
+	}
+
+	log.Printf("StateChangeMultisigned")
+
 }
 
 func main() {
@@ -167,42 +234,17 @@ func main() {
 	assert(err)
 	wethContract.SetAddress(common.BytesToAddress(wethcallresult[12:]))
 
-	// -- start processing
+	// -- register event handlers & start processing
 
-	parentClient.RegisterEventHandler(
-		*parentContract.Address,
-		"LogLock(uint256,address,uint256)",
-		handleLockEvent,
-	)
-	parentClient.RegisterEventHandler(
-		*parentContract.Address,
-		"Log(string)",
-		handleLogEvent,
-	)
+	assert(parentClient.RegisterEventHandler(parentContract, "LogLock", handleLockEvent))
+	assert(parentClient.RegisterEventHandler(parentContract, "Log", handleLogEvent))
 
-	childClient.RegisterEventHandler(
-		*childContract.Address,
-		"Log(string)",
-		handleLogEvent,
-	)
+	assert(childClient.RegisterEventHandler(childContract, "Log", handleLogEvent))
+	assert(childClient.RegisterEventHandler(childContract, "LogStateChangeMultisigned", handleStateChangeMultisigned))
+	assert(childClient.RegisterEventHandler(childContract, "LogMintMultisigned", handleMintMultisigned))
 
-	childClient.RegisterEventHandler(
-		*wethContract.Address,
-		"CommitState(uint256,bytes32)",
-		handleCommitStateEvent,
-	)
-
-	childClient.RegisterEventHandler(
-		*wethContract.Address,
-		"Transfer(address,address,uint256)",
-		handleTransferEvent,
-	)
-
-	childClient.RegisterEventHandler(
-		*wethContract.Address,
-		"Log(string)",
-		handleLogEvent,
-	)
+	assert(childClient.RegisterEventHandler(wethContract, "StateChange", handleStateChange))
+	assert(childClient.RegisterEventHandler(wethContract, "Log", handleLogEvent))
 
 	childClient.HandleEvents()
 	parentClient.HandleEvents()
