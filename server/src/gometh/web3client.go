@@ -90,7 +90,6 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 		Value: value,
 		Data:  calldata,
 	})
-
 	if err != nil {
 		return nil, nil, err
 	}

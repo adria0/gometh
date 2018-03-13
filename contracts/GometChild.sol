@@ -5,7 +5,8 @@ import "./WETH.sol";
 
 contract GometChild is OfflineMultisig {
 
-    event LogBurn(address from, uint value);
+    event LogBurn(uint256 epoch, address from, uint value);
+    event LogBurnMultisigned(address from, uint value);
     event LogMintMultisigned(address to, uint value);
     event LogStateChangeMultisigned(uint256 blockNo, bytes32 rootState);
 
@@ -13,12 +14,15 @@ contract GometChild is OfflineMultisig {
 
     function GometChild(address[] _signers) public 
     OfflineMultisig(_signers) {
-        weth = new WETH();
+    }
+
+    function init(address _weth) {
+      weth = WETH(_weth);
     }
 
     function burn(uint _amount) public {
        weth.burn(msg.sender,_amount);
-       LogBurn(msg.sender,_amount);
+       LogBurn(epochs.length-1,msg.sender,_amount);
     }
 
     function toLocalEther(uint _amount) public {
@@ -36,16 +40,17 @@ contract GometChild is OfflineMultisig {
 
     /* ---- multisig functions --------------------------------------- */
 
-    function _mint(address _to, uint _amount) public {
+    function _mintmultisigned(address _to, uint _amount) public {
        require(msg.sender == address(this));
 
-       LogMintMultisigned(_to,_amount);
        weth.mint(_to,_amount);
 
        // send a litte of ether to call toLocalEther
        if (_to.balance < 0.01 ether ) {
          _to.transfer(0.01 ether - _to.balance);
        }
+
+       LogMintMultisigned(_to,_amount);
     }
 
     // this function is called via partialExecuteOff, this means that all
@@ -55,6 +60,11 @@ contract GometChild is OfflineMultisig {
     function _statechangemultisigned(uint256 blockNo, bytes32 rootState) public {
        require(msg.sender == address(this));      
        LogStateChangeMultisigned(blockNo, rootState);
+    }
+
+    function _burnmultisigned(address from, uint value) public {
+       require(msg.sender == address(this));      
+       LogBurnMultisigned(from, value);
     }
 
 }

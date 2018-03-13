@@ -8,10 +8,10 @@ contract WETH is StandardToken, PatriciaTree  {
   event Log(string s);
   event StateChange(uint256 blockNo, bytes32 rootState);
 
-  address      owner;
+  address public owner;
 
-  function WETH() public{
-     owner = msg.sender;
+  function WETH(address _owner) public{
+     owner = _owner;
   }
 
   function mint(address _to, uint256 _amount) public {

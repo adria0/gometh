@@ -42,6 +42,11 @@ func callLock(value *big.Int) error {
 	return err
 }
 
+func callBurn(value *big.Int) error {
+	_, _, err := childContract.SendTransactionSync(big.NewInt(0), "burn", value)
+	return err
+}
+
 func sign(client *gometh.Web3Client, data ...[]byte) ([3][32]byte, error) {
 	web3SignaturePrefix := []byte("\x19Ethereum Signed Message:\n32")
 
@@ -77,7 +82,7 @@ func handleLockEvent(eventlog *types.Log) {
 
 	log.Printf("LockEvent %v %v wei", event.From.Hex(), event.Value)
 
-	mintmsg, err := childContract.Abi.Pack("_mint", event.From, event.Value)
+	mintmsg, err := childContract.Abi.Pack("_mintmultisigned", event.From, event.Value)
 	assert(err)
 
 	var txhash [32]byte
@@ -95,11 +100,49 @@ func handleLockEvent(eventlog *types.Log) {
 }
 
 func handleLogEvent(eventlog *types.Log) {
+
 	var event string
 	err := parentContract.Abi.Unpack(&event, "Log", eventlog.Data)
 	assert(err)
 
 	log.Printf("contractlog %#v\n", event)
+}
+
+func handleBurnEvent(eventlog *types.Log) {
+
+	type BurnEvent struct {
+		Epoch *big.Int
+		From  common.Address
+		Value *big.Int
+	}
+
+	var event BurnEvent
+	err := childContract.Abi.Unpack(&event, "LogBurn", eventlog.Data)
+	assert(err)
+
+	log.Printf("LogBurn")
+
+	burnmsg, err := childContract.Abi.Pack("_burnmultisigned", event.From, event.Value)
+	assert(err)
+
+	var txhash [32]byte
+	copy(txhash[:], eventlog.TxHash.Bytes())
+
+	log.Printf("partialExecuteOff _burnmultisigned")
+
+	_, _, err = childContract.SendTransactionSync(
+		big.NewInt(0),
+		"partialExecuteOn", event.Epoch, txhash, burnmsg,
+	)
+
+	assert(err)
+
+}
+
+func handleBurnMultisignedEvent(eventlog *types.Log) {
+
+	log.Printf("LogBurnMultisigned")
+
 }
 
 func handleStateChange(eventlog *types.Log) {
@@ -172,6 +215,11 @@ func handleStateChangeMultisigned(eventlog *types.Log) {
 
 }
 
+func dotest() {
+	callLock(big.NewInt(1000))
+	callBurn(big.NewInt(10))
+}
+
 func main() {
 
 	// -- open keystore
@@ -220,19 +268,21 @@ func main() {
 	childContract, err = gometh.NewContract(childClient, "../../build/contracts/GometChild.json")
 	assert(err)
 
+	wethContract, err = gometh.NewContract(childClient, "../../build/contracts/WETH.json")
+	assert(err)
+
 	// -- deploy contracts
 	initialSigners := []common.Address{parentClient.Account.Address}
 	_, _, err = parentContract.Deploy(initialSigners)
 	assert(err)
 	_, _, err = childContract.Deploy(initialSigners)
 	assert(err)
+	_, _, err = wethContract.Deploy(childContract.Address)
+	assert(err)
 
 	// -- get weth address
-	wethcallresult, err := childContract.Call(big.NewInt(0), "weth")
+	_, _, err = childContract.SendTransactionSync(big.NewInt(0), "init", wethContract.Address)
 	assert(err)
-	wethContract, err = gometh.NewContract(childClient, "../../build/contracts/WETH.json")
-	assert(err)
-	wethContract.SetAddress(common.BytesToAddress(wethcallresult[12:]))
 
 	// -- register event handlers & start processing
 
@@ -240,6 +290,8 @@ func main() {
 	assert(parentClient.RegisterEventHandler(parentContract, "Log", handleLogEvent))
 
 	assert(childClient.RegisterEventHandler(childContract, "Log", handleLogEvent))
+	assert(childClient.RegisterEventHandler(childContract, "LogBurn", handleBurnEvent))
+	assert(childClient.RegisterEventHandler(childContract, "LogBurnMultisigned", handleBurnMultisignedEvent))
 	assert(childClient.RegisterEventHandler(childContract, "LogStateChangeMultisigned", handleStateChangeMultisigned))
 	assert(childClient.RegisterEventHandler(childContract, "LogMintMultisigned", handleMintMultisigned))
 
@@ -251,7 +303,7 @@ func main() {
 
 	<-time.After(time.Second)
 
-	callLock(big.NewInt(1))
+	dotest()
 
 	<-time.After(time.Second * 3600)
 

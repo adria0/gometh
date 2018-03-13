@@ -71,4 +71,27 @@ contract("OfflineMultisig", (accounts) => {
 
     });
 
+    it("Add new signer in one, collect signatures and update into another", async () => {
+        
+        let newsigners = [poa1,poa2,poa3,poa4].sort()
+
+        let txid = web3.sha3("txid")
+        let epoch = (await multisig.getEpochs())-1
+
+        let data = multisig._changeSigners.request(epoch+1,newsigners).params[0].data;
+
+        await multisig.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa1))
+        await multisig.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa2))
+
+        assert(await multisig.isSigner(poa4));
+        assert((await multisig.getEpochs())-1==epoch+1);
+
+        let [csdata, cssigs] = await multisig.getSignatures(epoch,txid)
+
+        let multisig2 = await OfflineMultisig.new([poa1,poa2,poa3].sort());
+        await multisig2.fullExecuteOff(epoch,txid,csdata,cssigs)
+        assert(await multisig2.isSigner(poa4));
+        
+    });
+
 });
