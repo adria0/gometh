@@ -44,7 +44,8 @@ contract("GometParent", (accounts) => {
         let initialSigners = [poa1,poa2,poa3].sort()
         parent = await GometParent.new(initialSigners);
         child = await GometChild.new(initialSigners);
-        weth = WETH.at(await child.weth());
+        weth = await WETH.new(child.address);
+        await child.init(weth.address)
     });
 
     it("Lock ethers", async () => {
@@ -56,6 +57,7 @@ contract("GometParent", (accounts) => {
         assert((await weth.balanceOf(user1))==0)
 
         let res = await parent.lock( { value : amount, from: user1  });
+
         assert(res.logs[0].event == 'LogLock');
         let lockFrom = res.logs[0].args.from  
         let lockValue = res.logs[0].args.value
@@ -63,7 +65,6 @@ contract("GometParent", (accounts) => {
         let txid = web3.sha3("txid")
         let epoch = (await child.getEpochs())-1
         let data = child._mintmultisigned.request(lockFrom,lockValue).params[0].data;
-
         await child.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa1))
         await child.partialExecuteOff(epoch,txid,data,sign(epoch,txid,data,poa2))
 
