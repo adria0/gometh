@@ -1,0 +1,6 @@
+DataPath : .
+KeystorePath : /dyndata/keystore
+KeystorePasswd : 111111
+ContractsPath : ../../build/contracts
+ParentWSUrl : ws://127.0.0.1:8546
+ChildrenWSUrl : ws://127.0.0.1:8546

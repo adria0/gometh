@@ -255,7 +255,7 @@ func startServer() {
 	assert(err)
 	log.Println("ACCOUNT INFO CHiLD CHAIN", childAccountInfo)
 
-	// -- contracts
+	// -- load contracts
 	parentContract, err = eth.NewContract(parentClient, C.ContractsPath+"/GometParent.json")
 	assert(err)
 

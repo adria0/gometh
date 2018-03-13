@@ -3,6 +3,7 @@ package gometh
 import (
 	"context"
 	"encoding/hex"
+	"log"
 	"math/big"
 	"sync"
 	"time"
@@ -17,6 +18,14 @@ import (
 	"fmt"
 )
 
+var (
+	// ErrReceiptStatusFailed when recieving a failed transaction
+	ErrReceiptStatusFailed = fmt.Errorf("ReceiptStatusFailed")
+	// ErrReceiptNotRecieved when unable to retrieve a transaction
+	ErrReceiptNotRecieved = fmt.Errorf("ErrReceiptNotRecieved")
+)
+
+// EventHandler associates a function to an event
 type EventHandler struct {
 	Address        common.Address
 	EventSignature string
@@ -24,8 +33,8 @@ type EventHandler struct {
 	Handler        func(*types.Log)
 }
 
+// Web3Client defines a connection to a client via websockets
 type Web3Client struct {
-	ID             string
 	ClientMutex    *sync.Mutex
 	Client         *ethclient.Client
 	Account        accounts.Account
@@ -34,11 +43,12 @@ type Web3Client struct {
 	EventHandlers  []EventHandler
 }
 
-func NewWeb3Client(rpcUrl string, ks *keystore.KeyStore, account accounts.Account) (*Web3Client, error) {
+// NewWeb3Client creates a client, using a keystore and an account for transactions
+func NewWeb3Client(rpcURL string, ks *keystore.KeyStore, account accounts.Account) (*Web3Client, error) {
 
 	var err error
 
-	client, err := ethclient.Dial(rpcUrl)
+	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +62,7 @@ func NewWeb3Client(rpcUrl string, ks *keystore.KeyStore, account accounts.Accoun
 	}, nil
 }
 
+// AccountInfo retieves information about the default account
 func (b *Web3Client) AccountInfo() (string, error) {
 
 	address := b.Account.Address.Hex()
@@ -64,14 +75,14 @@ func (b *Web3Client) AccountInfo() (string, error) {
 	return address + "=" + balance.String() + " wei", nil
 }
 
+// SendTransactionSync executes a contract method and wait it finalizes
 func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, calldata []byte) (*types.Transaction, *types.Receipt, error) {
 
 	var err error
 	var tx *types.Transaction
 	var receipt *types.Receipt
 
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
-	defer cancel()
+	ctx := context.TODO()
 
 	network, err := b.Client.NetworkID(ctx)
 	if err != nil {
@@ -140,20 +151,20 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 	}
 
 	if receipt != nil && receipt.Status == types.ReceiptStatusFailed {
-		return tx, receipt, fmt.Errorf("ReceiptStatusFailed")
+		return tx, receipt, ErrReceiptStatusFailed
 	}
 
 	if receipt == nil {
-		return tx, receipt, fmt.Errorf("ReceiptStatusFailed")
+		return tx, receipt, ErrReceiptNotRecieved
 	}
 
 	return tx, receipt, err
 }
 
+// Call an constant method
 func (b *Web3Client) Call(to *common.Address, value *big.Int, calldata []byte) ([]byte, error) {
 
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
-	defer cancel()
+	ctx := context.TODO()
 
 	msg := ethereum.CallMsg{
 		From:  b.Account.Address,
@@ -165,6 +176,7 @@ func (b *Web3Client) Call(to *common.Address, value *big.Int, calldata []byte) (
 	return b.Client.CallContract(ctx, msg, nil)
 }
 
+// RegisterEventHandler registers a function to be called on event emission
 func (b *Web3Client) RegisterEventHandler(contract *Contract, event string, handler func(*types.Log)) error {
 
 	abievent, ok := contract.Abi.Events[event]
@@ -184,17 +196,18 @@ func (b *Web3Client) RegisterEventHandler(contract *Contract, event string, hand
 	return nil
 }
 
-func dumpLogEvent(eventlog *types.Log) {
-	fmt.Println("Log from address", eventlog.Address.Hex())
+func debugLog(eventlog *types.Log) {
+	log.Println("Log from address", eventlog.Address.Hex())
 	for c, t := range eventlog.Topics {
-		fmt.Printf("  Topic[%v]: %v", c, t.Hex())
+		log.Printf("  Topic[%v]: %v", c, t.Hex())
 	}
-	fmt.Println("  Data:", hex.EncodeToString(eventlog.Data))
+	log.Println("  Data:", hex.EncodeToString(eventlog.Data))
 }
 
+// HandleEvents starts processing event handling
 func (b *Web3Client) HandleEvents() error {
 
-	ctx := context.Background()
+	ctx := context.TODO()
 	ch := make(chan types.Log)
 
 	addrs := []common.Address{}
@@ -230,14 +243,15 @@ func (b *Web3Client) HandleEvents() error {
 			}
 			for _, v := range b.EventHandlers {
 				if logevent.Address == v.Address && logevent.Topics[0].Hex() == v.Topic {
-					//					log.Println("[Event] ", v.EventSignature)
 					if v.Handler != nil {
 						go v.Handler(&logevent)
+					} else {
+						log.Println("[Event] ", v.EventSignature)
 					}
 					break
 				}
 			}
-			//dumpLogEvent(&logevent)
+			//debugLog(&logevent)
 		}
 	}()
 
