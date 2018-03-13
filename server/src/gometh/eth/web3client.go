@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -24,6 +25,8 @@ type EventHandler struct {
 }
 
 type Web3Client struct {
+	ID             string
+	ClientMutex    *sync.Mutex
 	Client         *ethclient.Client
 	Account        accounts.Account
 	Ks             *keystore.KeyStore
@@ -55,7 +58,8 @@ func (b *Web3Client) AccountInfo() (string, error) {
 	ctx := context.TODO()
 	balance, err := b.Client.BalanceAt(ctx, b.Account.Address, nil)
 	if err != nil {
-		return "", nil
+
+		return "", err
 	}
 	return address + "=" + balance.String() + " wei", nil
 }
@@ -79,11 +83,6 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 		return nil, nil, err
 	}
 
-	nonce, err := b.Client.NonceAt(ctx, b.Account.Address, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	gasLimit, err := b.Client.EstimateGas(ctx, ethereum.CallMsg{
 		From:  b.Account.Address,
 		To:    to,
@@ -91,6 +90,14 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 		Data:  calldata,
 	})
 	if err != nil {
+		return nil, nil, err
+	}
+
+	b.ClientMutex.Lock()
+
+	nonce, err := b.Client.NonceAt(ctx, b.Account.Address, nil)
+	if err != nil {
+		b.ClientMutex.Unlock()
 		return nil, nil, err
 	}
 
@@ -114,12 +121,15 @@ func (b *Web3Client) SendTransactionSync(to *common.Address, value *big.Int, cal
 	}
 
 	if tx, err = b.Ks.SignTx(b.Account, tx, network); err != nil {
+		b.ClientMutex.Unlock()
 		return nil, nil, err
 	}
 
 	if err = b.Client.SendTransaction(ctx, tx); err != nil {
+		b.ClientMutex.Unlock()
 		return nil, nil, err
 	}
+	b.ClientMutex.Unlock()
 
 	start := time.Now()
 	for receipt == nil && time.Now().Sub(start) < b.ReceiptTimeout {

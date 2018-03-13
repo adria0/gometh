@@ -1,17 +1,13 @@
-package main
-
-/*
-
-geth --dev console --ws --networkid 1337
-
-*/
+package gometh
 
 import (
+	"fmt"
 	"log"
 	"math/big"
+	"sync"
 	"time"
 
-	"gometh"
+	eth "gometh/eth"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -21,8 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var instance string
-
 func assert(err error) {
 	if err != nil {
 		panic("Failed: " + err.Error())
@@ -30,11 +24,11 @@ func assert(err error) {
 }
 
 var (
-	parentClient   *gometh.Web3Client
-	childClient    *gometh.Web3Client
-	parentContract *gometh.Contract
-	childContract  *gometh.Contract
-	wethContract   *gometh.Contract
+	parentClient   *eth.Web3Client
+	childClient    *eth.Web3Client
+	parentContract *eth.Contract
+	childContract  *eth.Contract
+	wethContract   *eth.Contract
 )
 
 func callLock(value *big.Int) error {
@@ -47,7 +41,7 @@ func callBurn(value *big.Int) error {
 	return err
 }
 
-func sign(client *gometh.Web3Client, data ...[]byte) ([3][32]byte, error) {
+func sign(client *eth.Web3Client, data ...[]byte) ([3][32]byte, error) {
 	web3SignaturePrefix := []byte("\x19Ethereum Signed Message:\n32")
 
 	hash := crypto.Keccak256(data...)
@@ -220,55 +214,55 @@ func dotest() {
 	callBurn(big.NewInt(10))
 }
 
-func main() {
+func startServer() {
 
 	// -- open keystore
-
-	keystoreFolder := "keyStore"
-	keystorePasswd := "111111"
 
 	var err error
 	var account accounts.Account
 
-	ks := keystore.NewKeyStore(keystoreFolder, keystore.StandardScryptN, keystore.StandardScryptP)
-	if len(ks.Accounts()) == 0 {
-		account, err = ks.NewAccount(keystorePasswd)
-		assert(err)
-	} else {
-		account = ks.Accounts()[0]
+	ks := keystore.NewKeyStore(C.KeystorePath, keystore.StandardScryptN, keystore.StandardScryptP)
+	if len(ks.Accounts()) != 1 {
+		panic(fmt.Sprintf("Not exact one account in keystore, was %v", len(ks.Accounts())))
 	}
-	assert(ks.Unlock(account, keystorePasswd))
+	account = ks.Accounts()[0]
+	assert(ks.Unlock(account, C.KeystorePasswd))
 
 	// -- create clients
 
-	parentClient, err = gometh.NewWeb3Client(
-		"ws://127.0.0.1:8546",
+	parentClient, err = eth.NewWeb3Client(
+		C.ParentWSUrl,
 		ks,
 		account,
 	)
 	assert(err)
 
-	childClient, err = gometh.NewWeb3Client(
-		"ws://127.0.0.1:8546",
+	childClient, err = eth.NewWeb3Client(
+		C.ChildrenWSUrl,
 		ks,
 		account,
 	)
 	assert(err)
+
+	parentClient.ClientMutex = &sync.Mutex{}
+	childClient.ClientMutex = parentClient.ClientMutex
 
 	parentAccountInfo, err := parentClient.AccountInfo()
+	assert(err)
 	log.Println("ACCOUNT INFO PARENT CHAIN", parentAccountInfo)
 
 	childAccountInfo, err := childClient.AccountInfo()
+	assert(err)
 	log.Println("ACCOUNT INFO CHiLD CHAIN", childAccountInfo)
 
 	// -- contracts
-	parentContract, err = gometh.NewContract(parentClient, "../../build/contracts/GometParent.json")
+	parentContract, err = eth.NewContract(parentClient, C.ContractsPath+"/GometParent.json")
 	assert(err)
 
-	childContract, err = gometh.NewContract(childClient, "../../build/contracts/GometChild.json")
+	childContract, err = eth.NewContract(childClient, C.ContractsPath+"/GometChild.json")
 	assert(err)
 
-	wethContract, err = gometh.NewContract(childClient, "../../build/contracts/WETH.json")
+	wethContract, err = eth.NewContract(childClient, C.ContractsPath+"/WETH.json")
 	assert(err)
 
 	// -- deploy contracts
@@ -300,10 +294,6 @@ func main() {
 
 	childClient.HandleEvents()
 	parentClient.HandleEvents()
-
-	<-time.After(time.Second)
-
-	dotest()
 
 	<-time.After(time.Second * 3600)
 
