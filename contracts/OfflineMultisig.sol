@@ -4,7 +4,7 @@ contract OfflineMultisig {
 
     event Log(string s);
 
-    bytes constant web3SignaturePrefix = "\x19Ethereum Signed Message:\n32";
+    bytes constant WEB3_SIGNATURE_PREFIX = "\x19Ethereum Signed Message:\n32";
 
     address[][] public epochs;
 
@@ -31,13 +31,13 @@ contract OfflineMultisig {
       require(checkSignersOrder(_signers));
       uint epoch = epochs.length++;
       epochs[epoch].length = _signers.length;
-      for (uint i=0;i<_signers.length;i++) {
+      for (uint i = 0;i<_signers.length;i++) {
           epochs[epoch][i] = _signers[i];
       }
     }
 
     function checkSignersOrder(address[] _signers) internal pure returns (bool) {
-      for (uint i=0;i<_signers.length;i++) {
+      for (uint i = 0;i<_signers.length;i++) {
          if (i>0 && uint(_signers[i-1])>=uint(_signers[i])) {
             return false;
          }
@@ -47,7 +47,7 @@ contract OfflineMultisig {
     
     function isSigner( address _addr) public view returns (bool) {
         uint epoch = epochs.length-1;
-        for (uint i=0;i<epochs[epoch].length;i++) {
+        for (uint i = 0;i<epochs[epoch].length;i++) {
            if (epochs[epoch][i]==_addr) {
               return true;
             }
@@ -58,14 +58,14 @@ contract OfflineMultisig {
     function verifyMultiSignature(uint _epoch, bytes32 _hash, bytes32[] _sigs) view public
     returns (bool) {
 
-        uint signerNo=0;
+        uint signerNo = 0;
         
         address[] storage signers = epochs[epochs.length-1];
         if ( _epoch != 0 ) {
             signers = epochs[_epoch];
         }
         
-        for (uint i=0;i<_sigs.length;i+=3) {
+        for (uint i = 0;i<_sigs.length;i += 3) {
           
           // retrieve the signer
           
@@ -97,7 +97,7 @@ contract OfflineMultisig {
     function fullExecuteOff(uint _epoch, bytes32 _txid, bytes _data, bytes32[] _sigs) public {
         
         bytes32 hash = keccak256(_epoch,_txid,_data);
-        bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
+        bytes32 prefixedHash = keccak256(WEB3_SIGNATURE_PREFIX, hash);
 
         require(verifyMultiSignature(_epoch,prefixedHash,_sigs));
         require(!txns[_txid].executed);
@@ -114,7 +114,7 @@ contract OfflineMultisig {
         }
 
         bytes32 hash = keccak256(_epoch,_txid,_data);
-        bytes32 prefixedHash = keccak256(web3SignaturePrefix, hash);
+        bytes32 prefixedHash = keccak256(WEB3_SIGNATURE_PREFIX, hash);
 
         uint8 v = uint8(uint256(_sig[0]));
         bytes32 r = _sig[1];
@@ -144,7 +144,7 @@ contract OfflineMultisig {
         address signer;
         uint count = 0;
 
-        for (i=0;i<epochs[_epoch].length;i++) {
+        for (i = 0;i<epochs[_epoch].length;i++) {
             signer = epochs[_epoch][i];
             if (txnsigs[_txid].sigs[signer].length > 0) {
                 count++;
@@ -154,12 +154,12 @@ contract OfflineMultisig {
         bytes32[] memory signatures = new bytes32[](3*count);
 
         count = 0;
-        for (i=0;i<epochs[_epoch].length;i++) {
+        for (i = 0;i<epochs[_epoch].length;i++) {
             signer = epochs[_epoch][i];
             if (txnsigs[_txid].sigs[signer].length > 0) {
-                signatures[3*count]=txnsigs[_txid].sigs[signer][0];
-                signatures[3*count+1]=txnsigs[_txid].sigs[signer][1];
-                signatures[3*count+2]=txnsigs[_txid].sigs[signer][2];
+                signatures[3*count] = txnsigs[_txid].sigs[signer][0];
+                signatures[3*count+1] = txnsigs[_txid].sigs[signer][1];
+                signatures[3*count+2] = txnsigs[_txid].sigs[signer][2];
                 count++;
             }
         }
@@ -183,14 +183,14 @@ contract OfflineMultisig {
         require (!txns[_txid].approved[_signer]);
 
         txns[_txid].count++;
-        txns[_txid].approved[_signer]=true;
+        txns[_txid].approved[_signer] = true;
 
         address[] storage signers = epochs[epochs.length-1];
-        bool quorum = txns[_txid].count >= (2 * signers.length) /3;
+        bool quorum = txns[_txid].count >= (2 * signers.length) / 3;
 
         if (quorum) {
             require(this.call(_data));
-            txns[_txid].executed=true;
+            txns[_txid].executed = true;
         }
         
     }
@@ -208,7 +208,7 @@ contract OfflineMultisig {
       
           uint epoch = epochs.length++;
           epochs[epoch].length = _signers.length;
-          for (uint i=0;i<_signers.length;i++) {
+          for (uint i = 0;i<_signers.length;i++) {
               epochs[epoch][i] = _signers[i];
           }
 

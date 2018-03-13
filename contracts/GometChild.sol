@@ -30,7 +30,7 @@ contract GometChild is OfflineMultisig {
       uint share = _amount / signers.length;
 
       // split the amount between the current PoAs
-      for (uint i=0;i<signers.length;i++) {
+      for (uint i = 0;i<signers.length;i++) {
         weth.transfer(msg.sender,signers[i],share);
       }
 
